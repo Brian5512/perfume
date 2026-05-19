@@ -22,19 +22,19 @@ public class Perfume {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Long idPerfume;
     
     @Column(nullable=false)
-    private String nombre;
+    private String nombrePerfume;
 
     @Column(nullable=false)
-    private String marca;
+    private String marcaPerfume;
 
     @Column(nullable=false)
-    private String descripcion;
+    private String descripcionPerfume;
 
     @Column(nullable=false)
-    private double precio;
+    private double precioPerfume;
 
 }
 
