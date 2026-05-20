@@ -33,7 +33,7 @@ public class PerfumeController {
     
     @PutMapping("{id}")
     public Perfume putPerfume(@PathVariable Long id, @RequestBody Perfume perfume){
-        return perfumeService.crearPerfume(perfume);
+        return perfumeService.updatePerfume(id,perfume);
     }
 
     @DeleteMapping("{id}")

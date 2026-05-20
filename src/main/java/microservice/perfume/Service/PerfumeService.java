@@ -26,7 +26,17 @@ public class PerfumeService {
 
     public void deletePerfume(Long id) {
         perfumeRepository.deleteById(id);
-        
+    }
+
+    public Perfume updatePerfume(Long id,  Perfume perfume) {
+        Perfume perfumeExistente = perfumeRepository.findById(id).orElse(null);
+        if (perfumeExistente != null) {
+            perfumeExistente.setNombrePerfume(perfume.getNombrePerfume());
+            perfumeExistente.setMarcaPerfume(perfume.getMarcaPerfume());
+            perfumeExistente.setDescripcionPerfume(perfume.getDescripcionPerfume());
+            perfumeExistente.setPrecioPerfume(perfume.getPrecioPerfume());
+        }
+        return perfumeRepository.save(perfumeExistente);
     }
 }
 
