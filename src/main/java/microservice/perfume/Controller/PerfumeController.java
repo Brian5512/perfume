@@ -27,10 +27,14 @@ public class PerfumeController {
     }
     
     @GetMapping()
-    public List<Perfume> getPerfumes(){
+    public List<Perfume> getPerfumes() {
         return perfumeService.obtenerPerfume();
     }
     
+    @GetMapping("{id}")
+    public Perfume getPerfumeById(@PathVariable Long id){
+        return perfumeService.obtenerPerfumePorId(id);
+    }
     @PutMapping("{id}")
     public Perfume putPerfume(@PathVariable Long id, @RequestBody Perfume perfume){
         return perfumeService.updatePerfume(id,perfume);
