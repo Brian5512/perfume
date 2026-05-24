@@ -31,6 +31,7 @@ public class PerfumeController {
         return perfumeService.obtenerPerfume();
     }
     
+    
     @GetMapping("{id}")
     public Perfume getPerfumeById(@PathVariable Long id){
         return perfumeService.obtenerPerfumePorId(id);

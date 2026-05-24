@@ -4,6 +4,8 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 
 import jakarta.transaction.Transactional;
 import microservice.perfume.Model.Perfume;
@@ -43,9 +45,6 @@ public class PerfumeService {
         return perfumeRepository.findById(id).orElse(null);
     }
     
-    @GetMapping("{id}")
-    public Perfume getPerfumeById(@PathVariable Long id){
-        return perfumeService.obtenerPerfumePorId(id);
-    }
+
 }
 
