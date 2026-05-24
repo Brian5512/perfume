@@ -38,5 +38,14 @@ public class PerfumeService {
         }
         return perfumeRepository.save(perfumeExistente);
     }
+
+    public Perfume obtenerPerfumePorId(Long id) {
+        return perfumeRepository.findById(id).orElse(null);
+    }
+    
+    @GetMapping("{id}")
+    public Perfume getPerfumeById(@PathVariable Long id){
+        return perfumeService.obtenerPerfumePorId(id);
+    }
 }
 
