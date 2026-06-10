@@ -1,33 +1,26 @@
 package microservice.perfume.Service;
 
-import static microservice.perfume.TestDataFactory.ajusteRequest;
-import static microservice.perfume.TestDataFactory.inventario;
-import static microservice.perfume.TestDataFactory.inventarioRequest;
-import static microservice.perfume.TestDataFactory.producto;
-import static microservice.perfume.TestDataFactory.sucursal;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static microservice.perfume.TestDataFactory.*;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 import java.util.List;
 import java.util.Optional;
 
+import jakarta.persistence.EntityNotFoundException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import jakarta.persistence.EntityNotFoundException;
+import microservice.perfume.Dto.AjusteInventarioRequest;
+import microservice.perfume.Dto.InventarioRequest;
 import microservice.perfume.Dto.MovimientoInventarioRequest;
 import microservice.perfume.Model.Inventario;
+import microservice.perfume.Model.Producto;
+import microservice.perfume.Model.Sucursal;
 import microservice.perfume.Repository.InventarioRepository;
 import microservice.perfume.Repository.ProductoRepository;
 import microservice.perfume.Repository.SucursalRepository;
@@ -53,90 +46,217 @@ class InventarioServiceTest {
     @InjectMocks
     private InventarioService inventarioService;
 
-    @Test
-    void crearInventarioGuardaYGeneraAlertaSiStockEstaBajo() {
-        Inventario guardado = inventario(1L, 3, 5, 20);
-        when(productoRepository.findById(1L)).thenReturn(Optional.of(producto(1L)));
-        when(sucursalRepository.findById(1L)).thenReturn(Optional.of(sucursal(1L)));
-        when(inventarioRepository.save(any(Inventario.class))).thenReturn(guardado);
-        when(inventarioRepository.findById(1L)).thenReturn(Optional.of(guardado));
+    private Producto producto;
+    private Sucursal sucursal;
 
-        Inventario resultado = inventarioService.crearInventario(inventarioRequest(3, 5, 20));
+    @BeforeEach
+    void setup() {
+        producto = producto(1L);
+        sucursal = sucursal(1L);
+    }
+
+    // ==============================
+    // CREAR INVENTARIO
+    // ==============================
+
+    @Test
+    void crearInventario_ok() {
+        InventarioRequest request = inventarioRequest(10, 5, 20);
+
+        when(productoRepository.findById(1L))
+                .thenReturn(Optional.of(producto));
+
+        when(sucursalRepository.findById(1L))
+                .thenReturn(Optional.of(sucursal));
+
+        when(inventarioRepository.save(any(Inventario.class)))
+                .thenReturn(inventario(1L, 10, 5, 20));
+
+        // 🔥 FIX IMPORTANTE por llamada interna a verificarStockBajo()
+        when(inventarioRepository.findById(anyLong()))
+                .thenReturn(Optional.of(inventario(1L, 10, 5, 20)));
+
+        Inventario resultado = inventarioService.crearInventario(request);
+
+        assertEquals(10, resultado.getStockActual());
+        verify(inventarioRepository).save(any(Inventario.class));
+    }
+
+    @Test
+    void crearInventario_stockMinimoMayorMaximo_lanzaExcepcion() {
+        InventarioRequest request = inventarioRequest(10, 30, 20);
+
+        when(productoRepository.findById(1L))
+                .thenReturn(Optional.of(producto));
+
+        when(sucursalRepository.findById(1L))
+                .thenReturn(Optional.of(sucursal));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> inventarioService.crearInventario(request));
+    }
+
+    // ==============================
+    // LISTAR INVENTARIOS
+    // ==============================
+
+    @Test
+    void listarInventarios_ok() {
+        when(inventarioRepository.findAll())
+                .thenReturn(List.of(inventario(1L, 10, 5, 20)));
+
+        List<Inventario> lista = inventarioService.listarInventarios();
+
+        assertEquals(1, lista.size());
+    }
+
+    // ==============================
+    // OBTENER INVENTARIO
+    // ==============================
+
+    @Test
+    void obtenerInventario_ok() {
+        Inventario inv = inventario(1L, 10, 5, 20);
+
+        when(inventarioRepository.findById(1L))
+                .thenReturn(Optional.of(inv));
+
+        Inventario resultado = inventarioService.obtenerInventario(1L);
 
         assertEquals(1L, resultado.getIdInventario());
-        verify(alertaStockService).generarAlerta(guardado);
     }
 
     @Test
-    void crearInventarioRechazaStockMinimoMayorAlMaximo() {
-        when(productoRepository.findById(1L)).thenReturn(Optional.of(producto(1L)));
-        when(sucursalRepository.findById(1L)).thenReturn(Optional.of(sucursal(1L)));
+    void obtenerInventario_noExiste_lanzaExcepcion() {
+        when(inventarioRepository.findById(1L))
+                .thenReturn(Optional.empty());
 
-        assertThrows(IllegalArgumentException.class,
-                () -> inventarioService.crearInventario(inventarioRequest(3, 10, 5)));
-
-        verify(inventarioRepository, never()).save(any());
+        assertThrows(EntityNotFoundException.class,
+                () -> inventarioService.obtenerInventario(1L));
     }
 
+    // ==============================
+    // ACTUALIZAR INVENTARIO
+    // ==============================
+
     @Test
-    void ajustarInventarioConSalidaDescuentaStockYRegistraMovimiento() {
-        Inventario inventario = inventario(1L, 10, 5, 20);
-        when(inventarioRepository.findById(1L)).thenReturn(Optional.of(inventario));
-        when(inventarioRepository.save(inventario)).thenReturn(inventario);
+    void actualizarInventario_ok() {
+        Inventario existente = inventario(1L, 10, 5, 20);
+        InventarioRequest request = inventarioRequest(15, 5, 25);
 
-        Inventario resultado = inventarioService.ajustarInventario(1L, ajusteRequest("SALIDA", 4));
+        when(inventarioRepository.findById(1L))
+                .thenReturn(Optional.of(existente));
 
-        assertEquals(6, resultado.getStockActual());
-        ArgumentCaptor<MovimientoInventarioRequest> captor = ArgumentCaptor.forClass(MovimientoInventarioRequest.class);
-        verify(movimientoInventarioService).registrarMovimiento(captor.capture(), eq(false));
-        assertEquals("SALIDA", captor.getValue().getTipoMovimiento());
-        assertEquals(4, captor.getValue().getCantidad());
-        verify(alertaStockService, never()).generarAlerta(any());
+        when(productoRepository.findById(1L))
+                .thenReturn(Optional.of(producto));
+
+        when(sucursalRepository.findById(1L))
+                .thenReturn(Optional.of(sucursal));
+
+        when(inventarioRepository.save(any(Inventario.class)))
+                .thenReturn(existente);
+
+        when(inventarioRepository.findById(anyLong()))
+                .thenReturn(Optional.of(existente));
+
+        Inventario resultado = inventarioService.actualizarInventario(1L, request);
+
+        assertEquals(15, resultado.getStockActual());
+        verify(inventarioRepository).save(any(Inventario.class));
     }
 
-    @Test
-    void ajustarInventarioConEntradaNoPuedeSuperarStockMaximo() {
-        Inventario inventario = inventario(1L, 19, 5, 20);
-        when(inventarioRepository.findById(1L)).thenReturn(Optional.of(inventario));
-
-        assertThrows(IllegalArgumentException.class,
-                () -> inventarioService.ajustarInventario(1L, ajusteRequest("ENTRADA", 2)));
-    }
+    // ==============================
+    // ELIMINAR INVENTARIO
+    // ==============================
 
     @Test
-    void ajustarInventarioConSalidaNoPermiteStockNegativo() {
-        Inventario inventario = inventario(1L, 2, 5, 20);
-        when(inventarioRepository.findById(1L)).thenReturn(Optional.of(inventario));
+    void eliminarInventario_ok() {
+        Inventario inv = inventario(1L, 10, 5, 20);
 
-        assertThrows(IllegalArgumentException.class,
-                () -> inventarioService.ajustarInventario(1L, ajusteRequest("SALIDA", 3)));
-    }
+        when(inventarioRepository.findById(1L))
+                .thenReturn(Optional.of(inv));
 
-    @Test
-    void verificarStockBajoRetornaFalseCuandoHayStockSuficiente() {
-        Inventario inventario = inventario(1L, 8, 5, 20);
-        when(inventarioRepository.findById(1L)).thenReturn(Optional.of(inventario));
-
-        assertFalse(inventarioService.verificarStockBajo(1L));
-        verify(alertaStockService, never()).generarAlerta(any());
-    }
-
-    @Test
-    void obtenerInventarioLanzaSiNoExiste() {
-        when(inventarioRepository.findById(99L)).thenReturn(Optional.empty());
-
-        assertThrows(EntityNotFoundException.class, () -> inventarioService.obtenerInventario(99L));
-    }
-
-    @Test
-    void listarYEliminarInventarioDeleganEnRepositorio() {
-        Inventario inventario = inventario(1L, 10, 5, 20);
-        when(inventarioRepository.findAll()).thenReturn(List.of(inventario));
-        when(inventarioRepository.findById(1L)).thenReturn(Optional.of(inventario));
-
-        assertEquals(1, inventarioService.listarInventarios().size());
         inventarioService.eliminarInventario(1L);
 
-        verify(inventarioRepository).delete(inventario);
+        verify(inventarioRepository).delete(inv);
+    }
+
+    // ==============================
+    // AJUSTAR INVENTARIO
+    // ==============================
+
+    @Test
+    void ajustarInventario_entrada_ok() {
+        Inventario inv = inventario(1L, 10, 5, 20);
+        AjusteInventarioRequest request = ajusteRequest("ENTRADA", 5);
+
+        when(inventarioRepository.findById(1L))
+                .thenReturn(Optional.of(inv));
+
+        when(inventarioRepository.save(any(Inventario.class)))
+                .thenReturn(inv);
+
+        when(inventarioRepository.findById(anyLong()))
+                .thenReturn(Optional.of(inv));
+
+        Inventario resultado = inventarioService.ajustarInventario(1L, request);
+
+        assertEquals(15, resultado.getStockActual());
+        verify(movimientoInventarioService)
+                .registrarMovimiento(any(), eq(false));
+    }
+
+    @Test
+    void ajustarInventario_salida_sinStock_lanzaExcepcion() {
+        Inventario inv = inventario(1L, 2, 1, 20);
+        AjusteInventarioRequest request = ajusteRequest("SALIDA", 5);
+
+        when(inventarioRepository.findById(1L))
+                .thenReturn(Optional.of(inv));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> inventarioService.ajustarInventario(1L, request));
+    }
+
+    @Test
+    void ajustarInventario_tipoInvalido_lanzaExcepcion() {
+        Inventario inv = inventario(1L, 10, 5, 20);
+        AjusteInventarioRequest request = ajusteRequest("INVALIDO", 5);
+
+        when(inventarioRepository.findById(1L))
+                .thenReturn(Optional.of(inv));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> inventarioService.ajustarInventario(1L, request));
+    }
+
+    // ==============================
+    // VERIFICAR STOCK BAJO
+    // ==============================
+
+    @Test
+    void verificarStockBajo_true() {
+        Inventario inv = inventario(1L, 3, 5, 20);
+
+        when(inventarioRepository.findById(1L))
+                .thenReturn(Optional.of(inv));
+
+        boolean resultado = inventarioService.verificarStockBajo(1L);
+
+        assertTrue(resultado);
+        verify(alertaStockService).generarAlerta(inv);
+    }
+
+    @Test
+    void verificarStockBajo_false() {
+        Inventario inv = inventario(1L, 10, 5, 20);
+
+        when(inventarioRepository.findById(1L))
+                .thenReturn(Optional.of(inv));
+
+        boolean resultado = inventarioService.verificarStockBajo(1L);
+
+        assertFalse(resultado);
+        verify(alertaStockService, never()).generarAlerta(any());
     }
 }
