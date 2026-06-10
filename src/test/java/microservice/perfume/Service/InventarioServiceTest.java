@@ -72,8 +72,7 @@ class InventarioServiceTest {
         when(inventarioRepository.save(any(Inventario.class)))
                 .thenReturn(inventario(1L, 10, 5, 20));
 
-        // 🔥 FIX IMPORTANTE por llamada interna a verificarStockBajo()
-        when(inventarioRepository.findById(anyLong()))
+        when(inventarioRepository.findById(1L))
                 .thenReturn(Optional.of(inventario(1L, 10, 5, 20)));
 
         Inventario resultado = inventarioService.crearInventario(request);
@@ -156,9 +155,6 @@ class InventarioServiceTest {
         when(inventarioRepository.save(any(Inventario.class)))
                 .thenReturn(existente);
 
-        when(inventarioRepository.findById(anyLong()))
-                .thenReturn(Optional.of(existente));
-
         Inventario resultado = inventarioService.actualizarInventario(1L, request);
 
         assertEquals(15, resultado.getStockActual());
@@ -195,9 +191,6 @@ class InventarioServiceTest {
 
         when(inventarioRepository.save(any(Inventario.class)))
                 .thenReturn(inv);
-
-        when(inventarioRepository.findById(anyLong()))
-                .thenReturn(Optional.of(inv));
 
         Inventario resultado = inventarioService.ajustarInventario(1L, request);
 
