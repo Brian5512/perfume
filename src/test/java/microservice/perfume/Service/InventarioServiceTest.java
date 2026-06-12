@@ -11,13 +11,15 @@ import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import microservice.perfume.Dto.AjusteInventarioRequest;
+import microservice.perfume.Dto.BodegaDescuentoRequest;
+import microservice.perfume.Dto.DescuentoVentaRequest;
 import microservice.perfume.Dto.InventarioRequest;
-import microservice.perfume.Dto.MovimientoInventarioRequest;
 import microservice.perfume.Model.Inventario;
 import microservice.perfume.Model.Producto;
 import microservice.perfume.Model.Sucursal;
@@ -42,6 +44,9 @@ class InventarioServiceTest {
 
     @Mock
     private AlertaStockService alertaStockService;
+
+    @Mock
+    private BodegaClient bodegaClient;
 
     @InjectMocks
     private InventarioService inventarioService;
@@ -84,6 +89,20 @@ class InventarioServiceTest {
     @Test
     void crearInventario_stockMinimoMayorMaximo_lanzaExcepcion() {
         InventarioRequest request = inventarioRequest(10, 30, 20);
+
+        when(productoRepository.findById(1L))
+                .thenReturn(Optional.of(producto));
+
+        when(sucursalRepository.findById(1L))
+                .thenReturn(Optional.of(sucursal));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> inventarioService.crearInventario(request));
+    }
+
+    @Test
+    void crearInventario_stockActualMayorMaximo_lanzaExcepcion() {
+        InventarioRequest request = inventarioRequest(30, 5, 20);
 
         when(productoRepository.findById(1L))
                 .thenReturn(Optional.of(producto));
@@ -200,6 +219,35 @@ class InventarioServiceTest {
     }
 
     @Test
+    void ajustarInventario_entradaSuperaStockMaximo_lanzaExcepcion() {
+        Inventario inv = inventario(1L, 18, 5, 20);
+        AjusteInventarioRequest request = ajusteRequest("ENTRADA", 5);
+
+        when(inventarioRepository.findById(1L))
+                .thenReturn(Optional.of(inv));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> inventarioService.ajustarInventario(1L, request));
+    }
+
+    @Test
+    void ajustarInventario_ajuste_ok() {
+        Inventario inv = inventario(1L, 10, 5, 20);
+        AjusteInventarioRequest request = ajusteRequest("AJUSTE", 8);
+
+        when(inventarioRepository.findById(1L))
+                .thenReturn(Optional.of(inv));
+        when(inventarioRepository.save(any(Inventario.class)))
+                .thenReturn(inv);
+
+        Inventario resultado = inventarioService.ajustarInventario(1L, request);
+
+        assertEquals(8, resultado.getStockActual());
+        verify(movimientoInventarioService)
+                .registrarMovimiento(any(), eq(false));
+    }
+
+    @Test
     void ajustarInventario_salida_sinStock_lanzaExcepcion() {
         Inventario inv = inventario(1L, 2, 1, 20);
         AjusteInventarioRequest request = ajusteRequest("SALIDA", 5);
@@ -221,6 +269,77 @@ class InventarioServiceTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> inventarioService.ajustarInventario(1L, request));
+    }
+
+    @Test
+    void descontarVenta_ok_descuentaInventarioYBodega() {
+        Inventario inv = inventario(1L, 10, 5, 20);
+        DescuentoVentaRequest request = new DescuentoVentaRequest();
+        request.setProductoId(1L);
+        request.setSucursalId(1L);
+        request.setUsuarioId(1L);
+        request.setVentaId(100L);
+        request.setCantidad(3);
+
+        when(inventarioRepository.findByProductoIdProductoAndSucursalIdSucursal(1L, 1L))
+                .thenReturn(Optional.of(inv));
+        when(inventarioRepository.findById(1L))
+                .thenReturn(Optional.of(inv));
+        when(inventarioRepository.save(any(Inventario.class)))
+                .thenReturn(inv);
+
+        Inventario resultado = inventarioService.descontarVenta(request);
+
+        assertEquals(7, resultado.getStockActual());
+        verify(movimientoInventarioService)
+                .registrarMovimiento(any(), eq(false));
+
+        ArgumentCaptor<BodegaDescuentoRequest> captor = ArgumentCaptor.forClass(BodegaDescuentoRequest.class);
+        verify(bodegaClient).descontarPorVenta(captor.capture());
+        assertEquals(1L, captor.getValue().getProductoId());
+        assertEquals(1L, captor.getValue().getSucursalId());
+        assertEquals(100L, captor.getValue().getVentaId());
+        assertEquals(3, captor.getValue().getCantidad());
+    }
+
+    @Test
+    void descontarVenta_conInventarioIdYVentaIdNull_ok() {
+        Inventario inv = inventario(1L, 10, 5, 20);
+        DescuentoVentaRequest request = new DescuentoVentaRequest();
+        request.setInventarioId(1L);
+        request.setProductoId(1L);
+        request.setSucursalId(1L);
+        request.setCantidad(2);
+
+        when(inventarioRepository.findById(1L))
+                .thenReturn(Optional.of(inv));
+        when(inventarioRepository.save(any(Inventario.class)))
+                .thenReturn(inv);
+
+        Inventario resultado = inventarioService.descontarVenta(request);
+
+        assertEquals(8, resultado.getStockActual());
+
+        ArgumentCaptor<BodegaDescuentoRequest> captor = ArgumentCaptor.forClass(BodegaDescuentoRequest.class);
+        verify(bodegaClient).descontarPorVenta(captor.capture());
+        assertNull(captor.getValue().getVentaId());
+        assertEquals("Venta", captor.getValue().getMotivo());
+    }
+
+    @Test
+    void descontarVenta_sinInventarioParaProductoYSucursal_lanzaExcepcion() {
+        DescuentoVentaRequest request = new DescuentoVentaRequest();
+        request.setProductoId(1L);
+        request.setSucursalId(1L);
+        request.setCantidad(2);
+
+        when(inventarioRepository.findByProductoIdProductoAndSucursalIdSucursal(1L, 1L))
+                .thenReturn(Optional.empty());
+
+        assertThrows(EntityNotFoundException.class,
+                () -> inventarioService.descontarVenta(request));
+
+        verifyNoInteractions(bodegaClient);
     }
 
     // ==============================

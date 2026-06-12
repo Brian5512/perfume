@@ -8,6 +8,8 @@ import org.springframework.stereotype.Service;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
 import microservice.perfume.Dto.AjusteInventarioRequest;
+import microservice.perfume.Dto.BodegaDescuentoRequest;
+import microservice.perfume.Dto.DescuentoVentaRequest;
 import microservice.perfume.Dto.InventarioRequest;
 import microservice.perfume.Dto.MovimientoInventarioRequest;
 import microservice.perfume.Model.Inventario;
@@ -26,18 +28,21 @@ public class InventarioService {
     private final SucursalRepository sucursalRepository;
     private final MovimientoInventarioService movimientoInventarioService;
     private final AlertaStockService alertaStockService;
+    private final BodegaClient bodegaClient;
 
     public InventarioService(
             InventarioRepository inventarioRepository,
             ProductoRepository productoRepository,
             SucursalRepository sucursalRepository,
             MovimientoInventarioService movimientoInventarioService,
-            AlertaStockService alertaStockService) {
+            AlertaStockService alertaStockService,
+            BodegaClient bodegaClient) {
         this.inventarioRepository = inventarioRepository;
         this.productoRepository = productoRepository;
         this.sucursalRepository = sucursalRepository;
         this.movimientoInventarioService = movimientoInventarioService;
         this.alertaStockService = alertaStockService;
+        this.bodegaClient = bodegaClient;
     }
 
     public Inventario crearInventario(InventarioRequest request) {
@@ -107,6 +112,27 @@ public class InventarioService {
         return guardado;
     }
 
+    public Inventario descontarVenta(DescuentoVentaRequest request) {
+        Inventario inventario = buscarInventarioVenta(request);
+
+        AjusteInventarioRequest ajuste = new AjusteInventarioRequest();
+        ajuste.setUsuarioId(request.getUsuarioId());
+        ajuste.setTipoMovimiento("SALIDA");
+        ajuste.setCantidad(request.getCantidad());
+        ajuste.setMotivo("Venta" + (request.getVentaId() == null ? "" : " #" + request.getVentaId()));
+
+        Inventario guardado = ajustarInventario(inventario.getIdInventario(), ajuste);
+
+        bodegaClient.descontarPorVenta(new BodegaDescuentoRequest(
+                request.getProductoId(),
+                request.getSucursalId(),
+                request.getVentaId(),
+                request.getCantidad(),
+                ajuste.getMotivo()));
+
+        return guardado;
+    }
+
     public boolean verificarStockBajo(Long idInventario) {
         Inventario inventario = obtenerInventario(idInventario);
         if (inventario.getStockActual() <= inventario.getStockMinimo()) {
@@ -124,6 +150,16 @@ public class InventarioService {
     private Sucursal buscarSucursal(Long idSucursal) {
         return sucursalRepository.findById(idSucursal)
                 .orElseThrow(() -> new EntityNotFoundException("Sucursal no encontrada con id " + idSucursal));
+    }
+
+    private Inventario buscarInventarioVenta(DescuentoVentaRequest request) {
+        if (request.getInventarioId() != null) {
+            return obtenerInventario(request.getInventarioId());
+        }
+        return inventarioRepository.findByProductoIdProductoAndSucursalIdSucursal(request.getProductoId(), request.getSucursalId())
+                .orElseThrow(() -> new EntityNotFoundException(
+                        "Inventario no encontrado para producto " + request.getProductoId()
+                                + " y sucursal " + request.getSucursalId()));
     }
 
     private void validarRangosStock(Inventario inventario) {

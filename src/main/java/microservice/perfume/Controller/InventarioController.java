@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
 import microservice.perfume.Dto.AjusteInventarioRequest;
+import microservice.perfume.Dto.DescuentoVentaRequest;
 import microservice.perfume.Dto.InventarioRequest;
 import microservice.perfume.Model.Inventario;
 import microservice.perfume.Service.InventarioService;
@@ -57,6 +58,11 @@ public class InventarioController {
             @PathVariable Long id,
             @Valid @RequestBody AjusteInventarioRequest request) {
         return inventarioService.ajustarInventario(id, request);
+    }
+
+    @PostMapping("ventas/descontar")
+    public Inventario descontarVenta(@Valid @RequestBody DescuentoVentaRequest request) {
+        return inventarioService.descontarVenta(request);
     }
 
     @GetMapping("{id}/stock-bajo")

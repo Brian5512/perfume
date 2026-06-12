@@ -40,6 +40,7 @@ En Windows:
 - `GET /api/v1/sucursales/{id}/inventario`
 - `POST /api/v1/inventarios`
 - `PUT /api/v1/inventarios/{id}/ajustar`
+- `POST /api/v1/inventarios/ventas/descontar`
 - `POST /api/v1/movimientos-inventario`
 - `GET /api/v1/movimientos-inventario/inventarios/{idInventario}`
 - `GET /api/v1/alertas-stock`
@@ -94,6 +95,24 @@ Ajustar stock:
 ```
 
 Tipos de movimiento soportados: `ENTRADA`, `SALIDA`, `AJUSTE`.
+
+Descontar por venta desde el microservicio Ventas:
+
+```json
+{
+  "productoId": 1,
+  "sucursalId": 1,
+  "usuarioId": 1,
+  "ventaId": 1001,
+  "cantidad": 2
+}
+```
+
+Este endpoint registra una `SALIDA` en Inventario y luego llama por `RestTemplate` al microservicio Bodega. La URL de Bodega se configura con:
+
+```properties
+bodega.api.descuento-venta-url=http://localhost:8093/api/v1/despachos-producto/ventas/descontar
+```
 
 ## Pruebas
 
